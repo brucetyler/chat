@@ -1,0 +1,5 @@
+{
+  "less.compile": {
+    "out": false, // 是否输出css文件，false为不输出
+  }
+}
