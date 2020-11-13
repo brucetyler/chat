@@ -3,10 +3,10 @@ package controller
 import (
 	"fmt"
 	"net/http"
-	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
-	"chat/model"
+  "github.com/gin-gonic/gin"
 	"encoding/json"
+	"chat/model"
 )
 
 var wu = &websocket.Upgrader{ReadBufferSize: 512,
@@ -15,6 +15,7 @@ var wu = &websocket.Upgrader{ReadBufferSize: 512,
 
 type connection struct{
 	ws *websocket.Conn
+	data *model.User
 }
 
 type Board struct{
@@ -29,52 +30,65 @@ var board = Board{
 	msg: make(chan []byte),
 }
 
-var user model.User;
-
 func (board *Board)broadcast(){
 	for{
 		select{
-		case c := <- board.join:
-			board.client[c] = true;
+		case cli := <- board.join:
+			board.client[cli] = true;
+			cli.data.Name = user.Name;
+			fmt.Println("cli.data",cli.data)
 		case msg := <- board.msg:
-			user.Content = string(msg)
-			data_b, _ := json.Marshal(user);
 			for client:= range board.client {
-				fmt.Printf("%s\n",data_b)
-				fmt.Println(msg)
+				client.data.Content = string(msg);
+				data := client.data;
+				fmt.Println("user.Name",user.Name)
+				data.Name = user.Name;
+				data_b, _ := json.Marshal(data);
 				client.ws.WriteMessage(websocket.TextMessage,data_b)
 			}
 		}
 	}
 }
 
-func (c *connection)reader(){
+func (cli *connection)reader(){
 	for{
-		_,message,err := c.ws.ReadMessage();
+		_,message,err := cli.ws.ReadMessage();
 		if err != nil{
 				fmt.Println(err)
-				c.ws.Close()
+				cli.ws.Close()
 				return
 		}
-		user.Name = "bruce"
-		fmt.Printf("%s\n",message)
-		json.Unmarshal(message, &user)
-		fmt.Println("user",user)
+		json.Unmarshal(message, &cli.data)
+		user.Name = cli.data.Name;
+		fmt.Println("user",user.Name)
 		board.msg <- message;
 	}
 }
 
-func Connect(){
-	router := mux.NewRouter();
+func Connect(c *gin.Context){
+	fmt.Println("连接")
 	go board.broadcast();
-	router.HandleFunc("/ws",func(w http.ResponseWriter, r *http.Request){
-		ws,err := wu.Upgrade(w,r,nil);
-		if(err!=nil){
-			return;
-		}
-		c := &connection{ws:ws}
-		board.join <- c;
-		c.reader();
-	})
-	http.ListenAndServe("127.0.0.1:8000",router)
+	ws,err := wu.Upgrade(c.Writer,c.Request,nil);
+	if(err!=nil){
+		return;
+	}
+	cli := &connection{ws:ws,data:&model.User{}}
+	board.join <- cli;
+	cli.reader();
 }
+
+// func Connect(c *gin.Context){
+// 	fmt.Println("连接")
+// 	router := mux.NewRouter();
+// 	go board.broadcast();
+// 	router.HandleFunc("/ws",func(w http.ResponseWriter, r *http.Request){
+// 		ws,err := wu.Upgrade(w,r,nil);
+// 		if(err!=nil){
+// 			return;
+// 		}
+// 		c := &connection{ws:ws}
+// 		board.join <- c;
+// 		c.reader();
+// 	})
+// 	http.ListenAndServe("127.0.0.1:8000",router)
+// }

@@ -8,7 +8,6 @@ import (
 func main() {
     r := gin.Default()
     r.POST("/toLogin",controller.Userlogin)
-    controller.Connect();
-    //监听端口默认为8080
+    r.GET("/ws",controller.Connect)
     r.Run(":8000")
 }                                       
